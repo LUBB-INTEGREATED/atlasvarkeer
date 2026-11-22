@@ -14,7 +14,6 @@ export const PUBLIC_UI = {
       requestQuote: 'Offerte aanvragen',
       directCall: 'Direct bellen',
       adminEditPage: 'Bewerk deze pagina in CMS',
-      cmsLogin: 'CMS Beheer',
       groups: {
         operationeel: 'Operationeel op locatie',
         'planning-advies': 'Planning & advies',
@@ -133,7 +132,6 @@ export const PUBLIC_UI = {
       requestQuote: 'Request a quote',
       directCall: 'Call 24/7',
       adminEditPage: 'Edit this page in CMS',
-      cmsLogin: 'CMS Admin',
       groups: {
         operationeel: 'On-site Operations',
         'planning-advies': 'Planning & Consultancy',
@@ -259,8 +257,6 @@ export const ADMIN_UI = {
       loginRequired: 'Inloggen vereist',
       loginSub:
         'Log in met uw beheerdersaccount om de website, teksten, afbeeldingen en projecten te beheren.',
-      quickLogin: 'Direct inloggen als Beheerder',
-      otherEmail: 'Inloggen met ander e-mailadres →',
       cmsBadge: 'CMS Beheer',
       loggedInAs: 'Ingelogd als',
       viewLiveSite: 'Bekijk live website',
@@ -311,8 +307,6 @@ export const ADMIN_UI = {
       loginRequired: 'Sign in required',
       loginSub:
         'Sign in with your administrator account to manage pages, copy, images and projects.',
-      quickLogin: 'Quick sign in as Administrator',
-      otherEmail: 'Sign in with another email address →',
       cmsBadge: 'CMS Admin',
       loggedInAs: 'Signed in as',
       viewLiveSite: 'View live website',

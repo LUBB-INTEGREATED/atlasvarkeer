@@ -597,8 +597,8 @@ export function Header() {
         )}
       </header>
 
-      {/* Admin Quick-Edit Bar (shown only when an authenticated admin browses public pages) */}
-      {adminUser && (
+      {/* Admin Quick-Edit Bar (shown only when a verified Supabase admin browses public pages) */}
+      {adminUser?.isVerifiedAdmin && (
         <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 bg-atlas-black/95 backdrop-blur-md text-white px-3.5 py-2 rounded-full shadow-2xl border border-white/15 text-xs font-semibold">
           <span className="w-2 h-2 rounded-full bg-atlas-orange" />
           <Link

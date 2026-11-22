@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { useCms } from '@/cms/CmsContext';
 import { useAdminT } from '@/cms/adminTranslations';
-import { DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD } from '@/cms/cmsService';
 import { AtlasLogo } from '@/components/AtlasLogo';
 import { SeoHead } from '@/components/SeoHead';
 
@@ -37,13 +36,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     isLoaded,
     isSupabaseMode,
     submissions,
-    loginAdmin,
     logoutAdmin,
     toasts,
     dismissToast,
   } = useCms();
   const { t, uiLang, setUiLang, editLocale, setEditLocale } = useAdminT();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isVerifiedAdmin = Boolean(adminUser && adminUser.isVerifiedAdmin);
+
+  useEffect(() => {
+    if (isLoaded && !isVerifiedAdmin) {
+      router.replace('/admin/login');
+    }
+  }, [isLoaded, isVerifiedAdmin, router]);
 
   const navItems = [
     { label: t.nav.dashboard, href: '/admin', icon: LayoutDashboard, exact: true },
@@ -70,7 +76,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   const unreadSubmissionsCount = submissions.filter((s) => s.status === 'new').length;
 
-  if (!isLoaded) {
+  // Never render any admin UI before Supabase session & admin_users verification succeeds
+  if (!isLoaded || !adminUser || !adminUser.isVerifiedAdmin) {
     return (
       <div className="min-h-screen bg-atlas-grey flex items-center justify-center p-6">
         <SeoHead noIndex title="Atlas Holland CMS" />
@@ -79,45 +86,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">
             {t.shell.loading}
           </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!adminUser) {
-    return (
-      <div className="min-h-screen bg-atlas-grey flex items-center justify-center p-6">
-        <SeoHead noIndex title="Atlas Holland CMS Login" />
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-lg p-8 max-w-md w-full text-center space-y-5">
-          <div className="flex justify-center">
-            <AtlasLogo variant="light" />
-          </div>
-          <div>
-            <span className="inline-block bg-atlas-orange-soft text-atlas-orange text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-md mb-2">
-              {t.shell.secureEnv}
-            </span>
-            <h1 className="text-2xl font-extrabold text-atlas-black">
-              {t.shell.loginRequired}
-            </h1>
-            <p className="text-sm text-neutral-600 mt-1">
-              {t.shell.loginSub}
-            </p>
-          </div>
-          <div className="space-y-2.5">
-            <button
-              type="button"
-              onClick={() => loginAdmin(DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD)}
-              className="w-full inline-flex items-center justify-center bg-atlas-orange hover:bg-atlas-orange-dark text-white font-bold text-sm py-3.5 px-6 rounded-xl transition-colors cursor-pointer"
-            >
-              {t.shell.quickLogin} ({DEMO_ADMIN_EMAIL})
-            </button>
-            <Link
-              href="/admin/login"
-              className="w-full inline-flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-atlas-black font-bold text-xs py-3 px-6 rounded-xl transition-colors"
-            >
-              {t.shell.otherEmail}
-            </Link>
-          </div>
         </div>
       </div>
     );

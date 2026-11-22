@@ -85,13 +85,36 @@ export async function ensureSupabaseConfig(): Promise<boolean> {
   return isSupabaseConfigured;
 }
 
-const LOCAL_AUTH_KEY = 'atlas_cms_admin_session_v1';
-export const DEMO_ADMIN_EMAIL = 'admin@atlasholland.nl';
-export const DEMO_ADMIN_PASSWORD = 'atlas2026';
-
 export interface AdminUserSession {
+  id: string;
   email: string;
-  mode: 'supabase' | 'local';
+  mode: 'supabase';
+  isVerifiedAdmin: true;
+}
+
+export type AdminSignInErrorCode =
+  | 'NOT_CONFIGURED'
+  | 'INVALID_CREDENTIALS'
+  | 'NOT_ADMIN';
+
+async function checkUserIsAuthorizedAdmin(
+  sb: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await sb
+      .from('admin_users')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      return false;
+    }
+    return Boolean(data?.user_id);
+  } catch {
+    return false;
+  }
 }
 
 export interface SupabaseDiagnosticResult {
@@ -213,89 +236,62 @@ export async function testSupabaseConnection(): Promise<SupabaseDiagnosticResult
 export async function getAdminSession(): Promise<AdminUserSession | null> {
   await ensureSupabaseConfig();
   const sb = getSupabaseClient();
-  if (sb) {
-    const { data } = await sb.auth.getSession();
-    if (data.session?.user?.email) {
-      return { email: data.session.user.email, mode: 'supabase' };
-    }
-  }
-
-  if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem(LOCAL_AUTH_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AdminUserSession;
-  } catch {
+  if (!sb) {
     return null;
   }
+
+  const { data, error } = await sb.auth.getSession();
+  if (error || !data.session?.user?.id || !data.session.user.email) {
+    return null;
+  }
+
+  const isAuthorized = await checkUserIsAuthorizedAdmin(sb, data.session.user.id);
+  if (!isAuthorized) {
+    await sb.auth.signOut();
+    return null;
+  }
+
+  return {
+    id: data.session.user.id,
+    email: data.session.user.email,
+    mode: 'supabase',
+    isVerifiedAdmin: true,
+  };
 }
 
 export async function signInAdmin(
   email: string,
   password: string
-): Promise<{ user: AdminUserSession | null; error?: string }> {
+): Promise<{ user: AdminUserSession | null; errorCode?: AdminSignInErrorCode }> {
   await ensureSupabaseConfig();
   const sb = getSupabaseClient();
-  const normalizedEmail = email.trim().toLowerCase();
-
-  if (sb) {
-    const { data, error } = await sb.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
-    if (!error && data.user?.email) {
-      const session: AdminUserSession = {
-        email: data.user.email,
-        mode: 'supabase',
-      };
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(session));
-      }
-      return { user: session };
-    }
-
-    // If demo credentials are used and user hasn't been created in Supabase Auth yet,
-    // allow instant preview login so the admin isn't locked out while setting up Supabase Auth.
-    if (
-      normalizedEmail === DEMO_ADMIN_EMAIL &&
-      password === DEMO_ADMIN_PASSWORD
-    ) {
-      const session: AdminUserSession = {
-        email: normalizedEmail,
-        mode: 'local',
-      };
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(session));
-      }
-      return { user: session };
-    }
-
-    return {
-      user: null,
-      error:
-        error?.message ||
-        'Inloggen via Supabase mislukt. Controleer uw gegevens of gebruik de demo-login.',
-    };
+  if (!sb) {
+    return { user: null, errorCode: 'NOT_CONFIGURED' };
   }
 
-  // Local instant preview mode authentication
-  if (
-    (normalizedEmail === DEMO_ADMIN_EMAIL && password === DEMO_ADMIN_PASSWORD) ||
-    (normalizedEmail.includes('@') && password.length >= 6)
-  ) {
-    const session: AdminUserSession = {
-      email: normalizedEmail,
-      mode: 'local',
-    };
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(session));
-    }
-    return { user: session };
+  const normalizedEmail = email.trim().toLowerCase();
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: normalizedEmail,
+    password,
+  });
+
+  if (error || !data.user?.id || !data.user.email) {
+    return { user: null, errorCode: 'INVALID_CREDENTIALS' };
+  }
+
+  const isAuthorized = await checkUserIsAuthorizedAdmin(sb, data.user.id);
+  if (!isAuthorized) {
+    await sb.auth.signOut();
+    return { user: null, errorCode: 'NOT_ADMIN' };
   }
 
   return {
-    user: null,
-    error: `Ongeldige inloggegevens. Gebruik: ${DEMO_ADMIN_EMAIL} / ${DEMO_ADMIN_PASSWORD}`,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      mode: 'supabase',
+      isVerifiedAdmin: true,
+    },
   };
 }
 
@@ -305,9 +301,42 @@ export async function signOutAdmin(): Promise<void> {
   if (sb) {
     await sb.auth.signOut();
   }
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(LOCAL_AUTH_KEY);
+}
+
+export async function requestAdminPasswordReset(
+  email: string,
+  redirectTo: string
+): Promise<{ ok: boolean; error?: string }> {
+  await ensureSupabaseConfig();
+  const sb = getSupabaseClient();
+  if (!sb) {
+    return { ok: false, error: 'NOT_CONFIGURED' };
   }
+
+  const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+export async function updateAdminPassword(
+  newPassword: string
+): Promise<{ ok: boolean; error?: string }> {
+  await ensureSupabaseConfig();
+  const sb = getSupabaseClient();
+  if (!sb) {
+    return { ok: false, error: 'NOT_CONFIGURED' };
+  }
+
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
 }
 
 function mapRowToProject(r: Record<string, unknown>): ProjectItem {

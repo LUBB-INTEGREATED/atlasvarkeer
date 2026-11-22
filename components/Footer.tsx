@@ -307,10 +307,6 @@ export function Footer() {
             >
               {ui.footer.terms}
             </Link>
-            <span aria-hidden="true" className="text-neutral-600">·</span>
-            <Link href="/admin" className="hover:text-atlas-orange transition-colors">
-              {ui.nav.cmsLogin}
-            </Link>
           </div>
         </div>
       </div>

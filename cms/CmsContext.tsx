@@ -161,6 +161,8 @@ export function CmsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let unsubscribeAuth: (() => void) | undefined;
+
     async function init() {
       if (typeof window !== 'undefined') {
         const savedUi = window.localStorage.getItem(ADMIN_UI_LOCALE_KEY);
@@ -179,10 +181,29 @@ export function CmsProvider({ children }: { children: React.ReactNode }) {
       setSnapshot(loadedSnapshot);
       setAdminUser(session);
       setIsLoaded(true);
+
+      const sb = getSupabaseClient();
+      if (sb) {
+        const { data: sub } = sb.auth.onAuthStateChange(async (event) => {
+          if (!mounted) return;
+          if (event === 'SIGNED_OUT') {
+            setAdminUser(null);
+            return;
+          }
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+            const verified = await getAdminSession();
+            if (mounted) {
+              setAdminUser(verified);
+            }
+          }
+        });
+        unsubscribeAuth = () => sub.subscription.unsubscribe();
+      }
     }
     init();
     return () => {
       mounted = false;
+      if (unsubscribeAuth) unsubscribeAuth();
     };
   }, []);
 
@@ -291,9 +312,26 @@ export function CmsProvider({ children }: { children: React.ReactNode }) {
 
   const loginAdmin = useCallback(
     async (email: string, password: string) => {
-      const { user, error } = await signInAdmin(email, password);
+      const { user, errorCode } = await signInAdmin(email, password);
       if (!user) {
-        return { ok: false, error };
+        let errorMsg: string;
+        if (errorCode === 'NOT_CONFIGURED') {
+          errorMsg =
+            adminLocale === 'en'
+              ? 'CMS authentication is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel.'
+              : 'CMS-authenticatie is niet geconfigureerd. Voeg VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY toe in Vercel.';
+        } else if (errorCode === 'NOT_ADMIN') {
+          errorMsg =
+            adminLocale === 'en'
+              ? 'No administrator permissions for this account.'
+              : 'Geen beheerdersrechten voor dit account.';
+        } else {
+          errorMsg =
+            adminLocale === 'en'
+              ? 'Invalid email or password.'
+              : 'Onjuist e-mailadres of wachtwoord.';
+        }
+        return { ok: false, error: errorMsg };
       }
       setAdminUser(user);
       showToast(

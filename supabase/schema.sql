@@ -118,6 +118,26 @@ create table if not exists public.form_submissions (
 
 create index if not exists idx_form_submissions_created on public.form_submissions (created_at desc);
 
+-- 7. ADMIN USERS (Whitelist of authorized CMS administrators)
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- Helper function to verify if the current JWT belongs to an authorized admin
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.admin_users where user_id = auth.uid()
+  );
+$$;
+
 -- ============================================================================
 -- TABLE & SCHEMA GRANTS (Required so PostgREST anon/authenticated roles can query)
 -- Row Level Security (RLS) below still restricts what each role can read/write.
@@ -131,6 +151,7 @@ grant select on public.services to anon, authenticated, service_role;
 grant select on public.vacancies to anon, authenticated, service_role;
 grant select on public.media_assets to anon, authenticated, service_role;
 grant insert on public.form_submissions to anon, authenticated, service_role;
+grant select on public.admin_users to authenticated, service_role;
 
 grant all on public.site_content to authenticated, service_role;
 grant all on public.projects to authenticated, service_role;
@@ -152,6 +173,12 @@ alter table public.services enable row level security;
 alter table public.vacancies enable row level security;
 alter table public.media_assets enable row level security;
 alter table public.form_submissions enable row level security;
+alter table public.admin_users enable row level security;
+
+-- Admin users can read their own row in public.admin_users
+drop policy if exists "Admin users read own record" on public.admin_users;
+create policy "Admin users read own record" on public.admin_users
+  for select using (auth.uid() = user_id);
 
 -- Public read access for site_content & media_assets
 drop policy if exists "Public read site_content" on public.site_content;
@@ -165,45 +192,45 @@ create policy "Public read media_assets" on public.media_assets
 -- Public read access for published rows in projects, services, vacancies
 drop policy if exists "Public read published projects" on public.projects;
 create policy "Public read published projects" on public.projects
-  for select using (status = 'published' or auth.role() = 'authenticated');
+  for select using (status = 'published' or public.is_admin());
 
 drop policy if exists "Public read published services" on public.services;
 create policy "Public read published services" on public.services
-  for select using (status = 'published' or auth.role() = 'authenticated');
+  for select using (status = 'published' or public.is_admin());
 
 drop policy if exists "Public read published vacancies" on public.vacancies;
 create policy "Public read published vacancies" on public.vacancies
-  for select using (status = 'published' or auth.role() = 'authenticated');
+  for select using (status = 'published' or public.is_admin());
 
 -- Public visitors can submit forms (INSERT only)
 drop policy if exists "Public insert form_submissions" on public.form_submissions;
 create policy "Public insert form_submissions" on public.form_submissions
   for insert with check (true);
 
--- Authenticated admin full CRUD on all tables
+-- Verified admin full CRUD on all tables (strictly requires public.is_admin())
 drop policy if exists "Admin full access site_content" on public.site_content;
 create policy "Admin full access site_content" on public.site_content
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  for all using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Admin full access projects" on public.projects;
 create policy "Admin full access projects" on public.projects
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  for all using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Admin full access services" on public.services;
 create policy "Admin full access services" on public.services
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  for all using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Admin full access vacancies" on public.vacancies;
 create policy "Admin full access vacancies" on public.vacancies
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  for all using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Admin full access media_assets" on public.media_assets;
 create policy "Admin full access media_assets" on public.media_assets
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  for all using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Admin full access form_submissions" on public.form_submissions;
 create policy "Admin full access form_submissions" on public.form_submissions
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  for all using (public.is_admin()) with check (public.is_admin());
 
 -- ============================================================================
 -- STORAGE BUCKET: atlas-media
@@ -219,12 +246,13 @@ create policy "Public read atlas-media" on storage.objects
 
 drop policy if exists "Authenticated upload atlas-media" on storage.objects;
 create policy "Authenticated upload atlas-media" on storage.objects
-  for insert with check (bucket_id = 'atlas-media' and auth.role() = 'authenticated');
+  for insert with check (bucket_id = 'atlas-media' and public.is_admin());
 
 drop policy if exists "Authenticated update atlas-media" on storage.objects;
 create policy "Authenticated update atlas-media" on storage.objects
-  for update using (bucket_id = 'atlas-media' and auth.role() = 'authenticated');
+  for update using (bucket_id = 'atlas-media' and public.is_admin());
 
 drop policy if exists "Authenticated delete atlas-media" on storage.objects;
 create policy "Authenticated delete atlas-media" on storage.objects
-  for delete using (bucket_id = 'atlas-media' and auth.role() = 'authenticated');
+  for delete using (bucket_id = 'atlas-media' and public.is_admin());
+

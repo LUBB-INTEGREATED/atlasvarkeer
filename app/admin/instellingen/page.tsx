@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
 const GRANT_FIX_SQL = `grant usage on schema public to anon, authenticated, service_role;
 grant select on public.site_content, public.projects, public.services, public.vacancies, public.media_assets to anon, authenticated, service_role;
 grant insert on public.form_submissions to anon, authenticated, service_role;
+grant select on public.admin_users to authenticated, service_role;
 grant all on public.site_content, public.projects, public.services, public.vacancies, public.media_assets, public.form_submissions to authenticated, service_role;`;
 
 export default function AdminInstellingenPage() {
