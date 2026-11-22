@@ -2,11 +2,12 @@
 
 import React from 'react';
 import { useCms } from '@/cms/CmsContext';
+import { getLocalizedPath } from '@/i18n/routes';
 import { PageHero, CtaBand } from '@/components/SharedSections';
 import { OpleidingenClient } from '@/components/OpleidingenClient';
 
 export default function OpleidingenPage() {
-  const { pages } = useCms();
+  const { pages, locale } = useCms();
   const pageData = pages.courses;
   const { hero } = pageData;
 
@@ -20,7 +21,7 @@ export default function OpleidingenPage() {
         imageUrl={hero.image.url}
         imageAlt={hero.image.alt}
         primaryCta={{
-          label: 'Direct inschrijven',
+          label: locale === 'en' ? 'Register now' : 'Direct inschrijven',
           href: '#aanmelden',
         }}
         showPhoneCta
@@ -31,7 +32,7 @@ export default function OpleidingenPage() {
       <CtaBand
         headline={pageData.ctaHeadline}
         buttonLabel={pageData.ctaButtonLabel}
-        buttonHref="/contact"
+        buttonHref={getLocalizedPath('contact', locale)}
       />
     </div>
   );

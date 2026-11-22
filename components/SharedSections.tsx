@@ -185,7 +185,7 @@ export function PageHero({
   secondaryCta?: { label: string; href: string };
   showPhoneCta?: boolean;
 }) {
-  const { settings } = useCms();
+  const { settings, locale } = useCms();
 
   return (
     <section className="relative bg-atlas-black text-white overflow-hidden py-16 md:py-24">
@@ -243,7 +243,9 @@ export function PageHero({
                   className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-semibold text-sm sm:text-base px-6 py-3.5 rounded-full transition-colors whitespace-nowrap"
                 >
                   <Phone className="w-4 h-4 text-atlas-orange" strokeWidth={1.75} />
-                  <span>Bel direct: {settings.phoneDisplay}</span>
+                  <span>
+                    {locale === 'en' ? 'Call now:' : 'Bel direct:'} {settings.phoneDisplay}
+                  </span>
                 </a>
               )}
 
@@ -266,15 +268,17 @@ export function PageHero({
 /**
  * Photo-led Service Card:
  * rounded corners (18px), image on top, bold title, one-line description,
- * text link "Meer info →", soft shadow and lift on hover.
+ * text link "Meer info →" / "Learn more →", soft shadow and lift on hover.
  */
 export function ServiceCard({ service }: { service: CmsServiceItem }) {
+  const { locale } = useCms();
+  const ui = PUBLIC_UI[locale];
   const imgUrl = service.cardImage?.url || service.imageUrl;
   const imgAlt = service.cardImage?.alt || service.imageAlt || service.title;
 
   return (
     <Link
-      href={`/diensten/${service.slug}`}
+      href={getLocalizedPath('serviceDetail', locale, service.slug)}
       className="group bg-white rounded-[18px] border border-neutral-200/80 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col h-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atlas-orange"
     >
       <div className="aspect-[16/10] w-full overflow-hidden">
@@ -296,7 +300,7 @@ export function ServiceCard({ service }: { service: CmsServiceItem }) {
         </div>
         <div className="mt-5 pt-3 border-t border-neutral-100 flex items-center justify-between">
           <span className="inline-flex items-center gap-1.5 text-sm font-bold text-atlas-orange group-hover:gap-2.5 transition-all">
-            <span>Meer info</span>
+            <span>{ui.services.viewService}</span>
             <ArrowRight className="w-4 h-4" strokeWidth={2} />
           </span>
         </div>
@@ -308,12 +312,15 @@ export function ServiceCard({ service }: { service: CmsServiceItem }) {
 /**
  * Photo-led Project Card:
  * Matches the Atlas Holland visual system with 16:10 cover photo, category label,
- * location & period metadata, bold Montserrat title, deployment highlight, and "Bekijk project →".
+ * location & period metadata, bold Montserrat title, deployment highlight, and "Bekijk project →" / "View project →".
  */
 export function ProjectCard({ project }: { project: ProjectItem }) {
+  const { locale } = useCms();
+  const ui = PUBLIC_UI[locale];
+
   return (
     <Link
-      href={`/projecten/${project.slug}`}
+      href={getLocalizedPath('projectDetail', locale, project.slug)}
       className="group bg-white rounded-[18px] border border-neutral-200/85 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col h-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atlas-orange"
     >
       <div className="aspect-[16/10] w-full overflow-hidden relative">
@@ -365,7 +372,7 @@ export function ProjectCard({ project }: { project: ProjectItem }) {
           )}
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 text-sm font-bold text-atlas-orange group-hover:gap-2.5 transition-all">
-              <span>Bekijk project</span>
+              <span>{ui.projects.viewProject}</span>
               <ArrowRight className="w-4 h-4" strokeWidth={2} />
             </span>
           </div>
@@ -387,12 +394,15 @@ export function CtaBand({
   buttonLabel?: string;
   buttonHref?: string;
 }) {
-  const { pages, settings } = useCms();
+  const { pages, settings, locale } = useCms();
   const band = pages.home.ctaBand;
 
   const finalHeadline = headline || band.headline;
   const finalButtonLabel = buttonLabel || band.buttonLabel;
-  const finalButtonHref = buttonHref || band.buttonHref || '/offerte-aanvragen';
+  const finalButtonHref = localizeHref(
+    buttonHref || band.buttonHref || '/offerte-aanvragen',
+    locale
+  );
 
   return (
     <section className="bg-atlas-orange text-white py-10 md:py-12 relative overflow-hidden">
@@ -417,7 +427,7 @@ export function CtaBand({
                 >
                   {settings.phoneDisplay}
                 </a>{' '}
-                (24/7 bereikbaar)
+                ({locale === 'en' ? 'available 24/7' : '24/7 bereikbaar'})
               </p>
             )}
           </div>
@@ -462,7 +472,7 @@ export function ProcessSteps({
   subtitle?: string;
   bgClass?: string;
 }) {
-  const { pages } = useCms();
+  const { pages, locale } = useCms();
   const proc = pages.home.processSection;
 
   const finalEyebrow = eyebrow || proc.eyebrow;
@@ -498,7 +508,9 @@ export function ProcessSteps({
                       {step.number}
                     </span>
                     <span className="text-xs font-bold uppercase tracking-widest text-neutral-400">
-                      Stap {index + 1} van {proc.steps.length}
+                      {locale === 'en'
+                        ? `Step ${index + 1} of ${proc.steps.length}`
+                        : `Stap ${index + 1} van ${proc.steps.length}`}
                     </span>
                   </div>
                   <h3 className="text-xl font-extrabold text-atlas-black">
@@ -524,7 +536,7 @@ export function ProcessSteps({
  * Animated Key Figures Strip with Count-Up (CMS driven)
  */
 export function KeyFiguresStrip() {
-  const { pages } = useCms();
+  const { pages, locale } = useCms();
   const { items, visible } = pages.home.keyFigures;
 
   const ref = useRef<HTMLDivElement | null>(null);
@@ -554,7 +566,11 @@ export function KeyFiguresStrip() {
   return (
     <section
       ref={ref}
-      aria-label="Kerncijfers Atlas Holland B.V."
+      aria-label={
+        locale === 'en'
+          ? 'Key figures Atlas Holland B.V.'
+          : 'Kerncijfers Atlas Holland B.V.'
+      }
       className="bg-atlas-black text-white border-b border-white/10 py-10 md:py-12"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -639,7 +655,7 @@ export function LogoMarquee() {
  * Testimonial Slider (CMS driven)
  */
 export function TestimonialSlider() {
-  const { pages } = useCms();
+  const { pages, locale } = useCms();
   const { visible, eyebrow, titleLine1, titleLine2, items } =
     pages.home.testimonialsSection;
   const [activeIndex, setActiveIndex] = useState(0);
@@ -674,7 +690,7 @@ export function TestimonialSlider() {
             <button
               type="button"
               onClick={handlePrev}
-              aria-label="Vorige referentie"
+              aria-label={locale === 'en' ? 'Previous testimonial' : 'Vorige referentie'}
               className="w-11 h-11 rounded-full bg-white border border-neutral-200 hover:border-atlas-orange text-atlas-black hover:text-atlas-orange flex items-center justify-center transition-colors"
             >
               <ChevronLeft className="w-5 h-5" strokeWidth={1.75} />
@@ -682,7 +698,7 @@ export function TestimonialSlider() {
             <button
               type="button"
               onClick={handleNext}
-              aria-label="Volgende referentie"
+              aria-label={locale === 'en' ? 'Next testimonial' : 'Volgende referentie'}
               className="w-11 h-11 rounded-full bg-white border border-neutral-200 hover:border-atlas-orange text-atlas-black hover:text-atlas-orange flex items-center justify-center transition-colors"
             >
               <ChevronRight className="w-5 h-5" strokeWidth={1.75} />
@@ -750,26 +766,32 @@ export function TestimonialSlider() {
  * Reusable FAQ Accordion
  */
 export function FaqAccordion({
-  eyebrow = 'VEELGESTELDE VRAGEN',
-  title = 'Antwoorden op uw vragen',
+  eyebrow,
+  title,
   faqs,
 }: {
   eyebrow?: string;
   title?: string;
   faqs: { question: string; answer: string }[];
 }) {
+  const { locale } = useCms();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   if (!faqs || faqs.length === 0) return null;
+
+  const finalEyebrow =
+    eyebrow || (locale === 'en' ? 'FREQUENTLY ASKED QUESTIONS' : 'VEELGESTELDE VRAGEN');
+  const finalTitle =
+    title || (locale === 'en' ? 'Answers to your questions' : 'Antwoorden op uw vragen');
 
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-10">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-atlas-orange mb-2">
-          {eyebrow}
+          {finalEyebrow}
         </p>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-atlas-black">
-          {title}
+          {finalTitle}
         </h2>
       </div>
 

@@ -29,6 +29,7 @@ export function Header() {
   const pathname = usePathname() || '/';
   const {
     locale,
+    adminLocale,
     setEditLocale,
     settings,
     services,
@@ -607,7 +608,7 @@ export function Header() {
           >
             <Edit3 className="w-3.5 h-3.5 text-atlas-orange" strokeWidth={2} />
             <span>
-              {ui.nav.adminEditPage} ({locale.toUpperCase()})
+              {adminLocale === 'en' ? 'Edit this page' : ui.nav.adminEditPage} ({locale.toUpperCase()})
             </span>
           </Link>
           <span aria-hidden="true" className="text-neutral-600">|</span>
