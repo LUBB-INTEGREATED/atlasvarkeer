@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <!-- Home -->
+  <url>
+    <loc>https://www.atlasholland.nl/</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/" />
+  </url>
+  <!-- Services Overview -->
+  <url>
+    <loc>https://www.atlasholland.nl/diensten</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/diensten" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/services" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/diensten" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/services</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/diensten" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/services" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/diensten" />
+  </url>
+  <!-- Projects Overview -->
+  <url>
+    <loc>https://www.atlasholland.nl/projecten</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/projecten" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/projects" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/projecten" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/projects</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/projecten" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/projects" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/projecten" />
+  </url>
+  <!-- Training / Courses -->
+  <url>
+    <loc>https://www.atlasholland.nl/opleidingen</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/opleidingen" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/training" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/opleidingen" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/training</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/opleidingen" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/training" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/opleidingen" />
+  </url>
+  <!-- About -->
+  <url>
+    <loc>https://www.atlasholland.nl/over-ons</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/over-ons" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/about" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/over-ons" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/about</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/over-ons" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/about" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/over-ons" />
+  </url>
+  <!-- Careers -->
+  <url>
+    <loc>https://www.atlasholland.nl/werken-bij</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/werken-bij" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/careers" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/werken-bij" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/careers</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/werken-bij" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/careers" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/werken-bij" />
+  </url>
+  <!-- Quote -->
+  <url>
+    <loc>https://www.atlasholland.nl/offerte-aanvragen</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/offerte-aanvragen" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/request-quote" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/offerte-aanvragen" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/request-quote</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/offerte-aanvragen" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/request-quote" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/offerte-aanvragen" />
+  </url>
+  <!-- Contact -->
+  <url>
+    <loc>https://www.atlasholland.nl/contact</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/contact" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/contact" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/contact" />
+  </url>
+  <url>
+    <loc>https://www.atlasholland.nl/en/contact</loc>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://www.atlasholland.nl/contact" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.atlasholland.nl/en/contact" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.atlasholland.nl/contact" />
+  </url>
+</urlset>
