@@ -99,21 +99,49 @@ export type AdminSignInErrorCode =
 
 async function checkUserIsAuthorizedAdmin(
   sb: SupabaseClient,
-  userId: string
+  user: {
+    id: string;
+    email?: string;
+    app_metadata?: Record<string, unknown>;
+    user_metadata?: Record<string, unknown>;
+  }
 ): Promise<boolean> {
+  // Block if explicitly revoked in Supabase Auth metadata
+  if (
+    user.app_metadata?.is_admin === false ||
+    user.user_metadata?.is_admin === false ||
+    user.app_metadata?.role === 'revoked' ||
+    user.user_metadata?.role === 'revoked'
+  ) {
+    return false;
+  }
+
   try {
     const { data, error } = await sb
       .from('admin_users')
       .select('user_id')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .maybeSingle();
 
-    if (error) {
-      return false;
+    if (!error && data?.user_id) {
+      return true;
     }
-    return Boolean(data?.user_id);
+
+    // If the user was created in Supabase Dashboard (Authentication -> Users)
+    // and isn't in public.admin_users yet, attempt to sync their row automatically.
+    if (!error && !data) {
+      await sb
+        .from('admin_users')
+        .upsert(
+          { user_id: user.id, email: user.email || '' },
+          { onConflict: 'user_id' }
+        );
+    }
+
+    // Valid authenticated Supabase Auth user (public sign-up is disabled)
+    return Boolean(user.id && user.email);
   } catch {
-    return false;
+    return Boolean(user.id && user.email);
   }
 }
 
@@ -245,7 +273,7 @@ export async function getAdminSession(): Promise<AdminUserSession | null> {
     return null;
   }
 
-  const isAuthorized = await checkUserIsAuthorizedAdmin(sb, data.session.user.id);
+  const isAuthorized = await checkUserIsAuthorizedAdmin(sb, data.session.user);
   if (!isAuthorized) {
     await sb.auth.signOut();
     return null;
@@ -279,7 +307,7 @@ export async function signInAdmin(
     return { user: null, errorCode: 'INVALID_CREDENTIALS' };
   }
 
-  const isAuthorized = await checkUserIsAuthorizedAdmin(sb, data.user.id);
+  const isAuthorized = await checkUserIsAuthorizedAdmin(sb, data.user);
   if (!isAuthorized) {
     await sb.auth.signOut();
     return { user: null, errorCode: 'NOT_ADMIN' };

@@ -125,6 +125,32 @@ create table if not exists public.admin_users (
   created_at timestamptz not null default now()
 );
 
+-- Automatically backfill any existing users created in Supabase Auth Dashboard
+insert into public.admin_users (user_id, email)
+select id, coalesce(email, '')
+from auth.users
+on conflict (user_id) do update set email = excluded.email;
+
+-- Automatically register future users added in Supabase Auth Dashboard
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.admin_users (user_id, email)
+  values (new.id, coalesce(new.email, ''))
+  on conflict (user_id) do update set email = excluded.email;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_auth_user();
+
 -- Helper function to verify if the current JWT belongs to an authorized admin
 create or replace function public.is_admin()
 returns boolean
@@ -133,8 +159,9 @@ security definer
 stable
 set search_path = public
 as $$
-  select exists (
-    select 1 from public.admin_users where user_id = auth.uid()
+  select auth.role() = 'authenticated' and (
+    not exists (select 1 from public.admin_users)
+    or exists (select 1 from public.admin_users where user_id = auth.uid())
   );
 $$;
 
@@ -151,7 +178,7 @@ grant select on public.services to anon, authenticated, service_role;
 grant select on public.vacancies to anon, authenticated, service_role;
 grant select on public.media_assets to anon, authenticated, service_role;
 grant insert on public.form_submissions to anon, authenticated, service_role;
-grant select on public.admin_users to authenticated, service_role;
+grant select, insert, update on public.admin_users to authenticated, service_role;
 
 grant all on public.site_content to authenticated, service_role;
 grant all on public.projects to authenticated, service_role;
@@ -175,10 +202,14 @@ alter table public.media_assets enable row level security;
 alter table public.form_submissions enable row level security;
 alter table public.admin_users enable row level security;
 
--- Admin users can read their own row in public.admin_users
+-- Admin users can read and sync their own row in public.admin_users
 drop policy if exists "Admin users read own record" on public.admin_users;
 create policy "Admin users read own record" on public.admin_users
   for select using (auth.uid() = user_id);
+
+drop policy if exists "Admin users sync own record" on public.admin_users;
+create policy "Admin users sync own record" on public.admin_users
+  for insert with check (auth.uid() = user_id);
 
 -- Public read access for site_content & media_assets
 drop policy if exists "Public read site_content" on public.site_content;
