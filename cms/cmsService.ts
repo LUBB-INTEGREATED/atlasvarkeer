@@ -367,6 +367,379 @@ export async function updateAdminPassword(
   return { ok: true };
 }
 
+export interface CmsAdminAccount {
+  id: string;
+  email: string;
+  createdAt: string;
+  lastSignInAt?: string | null;
+  isCurrentUser: boolean;
+}
+
+export async function listAdminUsers(): Promise<{
+  users: CmsAdminAccount[];
+  sqlHelperNeeded: boolean;
+  error?: string;
+}> {
+  await ensureSupabaseConfig();
+  const sb = getSupabaseClient();
+  if (!sb) {
+    return { users: [], sqlHelperNeeded: false, error: 'NOT_CONFIGURED' };
+  }
+
+  const { data: sessionData } = await sb.auth.getSession();
+  const currentUser = sessionData.session?.user;
+  const accessToken = sessionData.session?.access_token;
+
+  if (!currentUser || !accessToken) {
+    return { users: [], sqlHelperNeeded: false, error: 'UNAUTHORIZED' };
+  }
+
+  // 1. Try server-side Admin API route (/api/cms/users) if SUPABASE_SERVICE_ROLE_KEY is configured
+  try {
+    const res = await fetch('/api/cms/users', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const json = (await res.json()) as {
+        users: Array<{
+          id: string;
+          email: string;
+          createdAt: string;
+          lastSignInAt?: string | null;
+        }>;
+      };
+      return {
+        users: json.users.map((u) => ({
+          ...u,
+          isCurrentUser: u.id === currentUser.id,
+        })),
+        sqlHelperNeeded: false,
+      };
+    }
+  } catch {
+    // Fallback to RPC
+  }
+
+  // 2. Try Postgres SECURITY DEFINER RPC (admin_list_users)
+  const { data: rpcData, error: rpcErr } = await sb.rpc('admin_list_users');
+  if (!rpcErr && Array.isArray(rpcData)) {
+    const mapped: CmsAdminAccount[] = (
+      rpcData as Array<{
+        user_id: string;
+        email: string;
+        created_at: string;
+        last_sign_in_at?: string | null;
+      }>
+    ).map((r) => ({
+      id: String(r.user_id),
+      email: String(r.email || ''),
+      createdAt: String(r.created_at || new Date().toISOString()),
+      lastSignInAt: r.last_sign_in_at ? String(r.last_sign_in_at) : null,
+      isCurrentUser: String(r.user_id) === currentUser.id,
+    }));
+
+    if (!mapped.some((u) => u.id === currentUser.id)) {
+      mapped.unshift({
+        id: currentUser.id,
+        email: currentUser.email || '',
+        createdAt: currentUser.created_at || new Date().toISOString(),
+        lastSignInAt: currentUser.last_sign_in_at || null,
+        isCurrentUser: true,
+      });
+    }
+
+    return { users: mapped, sqlHelperNeeded: false };
+  }
+
+  // 3. Fallback to public.admin_users table + active session user
+  const { data: tableData } = await sb
+    .from('admin_users')
+    .select('user_id, email, created_at')
+    .order('created_at', { ascending: true });
+
+  const list: CmsAdminAccount[] = (tableData || []).map(
+    (r: { user_id: string; email: string; created_at: string }) => ({
+      id: String(r.user_id),
+      email: String(r.email || ''),
+      createdAt: String(r.created_at || new Date().toISOString()),
+      lastSignInAt:
+        String(r.user_id) === currentUser.id
+          ? currentUser.last_sign_in_at || null
+          : null,
+      isCurrentUser: String(r.user_id) === currentUser.id,
+    })
+  );
+
+  if (!list.some((u) => u.id === currentUser.id)) {
+    list.unshift({
+      id: currentUser.id,
+      email: currentUser.email || '',
+      createdAt: currentUser.created_at || new Date().toISOString(),
+      lastSignInAt: currentUser.last_sign_in_at || null,
+      isCurrentUser: true,
+    });
+  }
+
+  return { users: list, sqlHelperNeeded: true };
+}
+
+export async function createAdminUser(
+  email: string,
+  password: string
+): Promise<{ ok: boolean; error?: string; needsConfirmationEmail?: boolean }> {
+  await ensureSupabaseConfig();
+  const sb = getSupabaseClient();
+  if (!sb) {
+    return { ok: false, error: 'NOT_CONFIGURED' };
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const { data: sessionData } = await sb.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  if (!accessToken) {
+    return { ok: false, error: 'UNAUTHORIZED' };
+  }
+
+  // 1. Try server-side Admin API route (/api/cms/users)
+  try {
+    const res = await fetch('/api/cms/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ email: cleanEmail, password }),
+    });
+    if (res.status !== 501) {
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        return { ok: false, error: json.error || 'Could not create user' };
+      }
+      return { ok: true };
+    }
+  } catch {
+    // Fallback to RPC
+  }
+
+  // 2. Try Postgres SECURITY DEFINER RPC (admin_create_user)
+  const { error: rpcErr } = await sb.rpc('admin_create_user', {
+    target_email: cleanEmail,
+    target_password: password,
+  });
+
+  if (!rpcErr) {
+    return { ok: true };
+  }
+
+  const rpcMsg = String(rpcErr.message || '');
+  const isRpcMissing =
+    rpcErr.code === 'PGRST202' ||
+    rpcErr.code === '42883' ||
+    rpcMsg.toLowerCase().includes('could not find the function') ||
+    rpcMsg.toLowerCase().includes('does not exist');
+
+  if (!isRpcMissing) {
+    return { ok: false, error: rpcMsg };
+  }
+
+  // 3. Fallback: Isolated non-persisting Supabase client signUp (does not log out current admin)
+  const tempClient = createClient(runtimeSupabaseUrl, runtimeSupabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'atlas_temp_admin_create',
+    },
+  });
+
+  const { data: signUpData, error: signUpErr } = await tempClient.auth.signUp({
+    email: cleanEmail,
+    password,
+    options: {
+      data: { is_admin: true },
+    },
+  });
+
+  if (signUpErr || !signUpData.user) {
+    return {
+      ok: false,
+      error: signUpErr?.message || 'Could not create user in Supabase Auth.',
+    };
+  }
+
+  try {
+    await sb.from('admin_users').upsert(
+      {
+        user_id: signUpData.user.id,
+        email: cleanEmail,
+      },
+      { onConflict: 'user_id' }
+    );
+  } catch {
+    // Ignore if admin_users table doesn't exist yet
+  }
+
+  return {
+    ok: true,
+    needsConfirmationEmail: !signUpData.user.email_confirmed_at,
+  };
+}
+
+export async function changeAdminUserPassword(
+  targetUserId: string,
+  newPassword: string
+): Promise<{ ok: boolean; error?: string; needsSqlRpc?: boolean }> {
+  await ensureSupabaseConfig();
+  const sb = getSupabaseClient();
+  if (!sb) {
+    return { ok: false, error: 'NOT_CONFIGURED' };
+  }
+
+  const { data: sessionData } = await sb.auth.getSession();
+  const currentUser = sessionData.session?.user;
+  const accessToken = sessionData.session?.access_token;
+
+  if (!currentUser || !accessToken) {
+    return { ok: false, error: 'UNAUTHORIZED' };
+  }
+
+  // Changing your own password works directly via Supabase Auth JWT session
+  if (targetUserId === currentUser.id) {
+    const { error } = await sb.auth.updateUser({ password: newPassword });
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  }
+
+  // 1. Try server-side Admin API route (/api/cms/users)
+  try {
+    const res = await fetch('/api/cms/users', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ userId: targetUserId, password: newPassword }),
+    });
+    if (res.status !== 501) {
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        return { ok: false, error: json.error || 'Could not update password' };
+      }
+      return { ok: true };
+    }
+  } catch {
+    // Fallback to RPC
+  }
+
+  // 2. Try Postgres SECURITY DEFINER RPC (admin_update_user_password)
+  const { error: rpcErr } = await sb.rpc('admin_update_user_password', {
+    target_user_id: targetUserId,
+    new_password: newPassword,
+  });
+
+  if (!rpcErr) {
+    return { ok: true };
+  }
+
+  const rpcMsg = String(rpcErr.message || '');
+  const isRpcMissing =
+    rpcErr.code === 'PGRST202' ||
+    rpcErr.code === '42883' ||
+    rpcMsg.toLowerCase().includes('could not find the function') ||
+    rpcMsg.toLowerCase().includes('does not exist');
+
+  if (isRpcMissing) {
+    return {
+      ok: false,
+      needsSqlRpc: true,
+      error: 'SQL_RPC_REQUIRED',
+    };
+  }
+
+  return { ok: false, error: rpcMsg };
+}
+
+export async function deleteAdminUser(
+  targetUserId: string
+): Promise<{ ok: boolean; error?: string; needsSqlRpc?: boolean }> {
+  await ensureSupabaseConfig();
+  const sb = getSupabaseClient();
+  if (!sb) {
+    return { ok: false, error: 'NOT_CONFIGURED' };
+  }
+
+  const { data: sessionData } = await sb.auth.getSession();
+  const currentUser = sessionData.session?.user;
+  const accessToken = sessionData.session?.access_token;
+
+  if (!currentUser || !accessToken) {
+    return { ok: false, error: 'UNAUTHORIZED' };
+  }
+
+  if (targetUserId === currentUser.id) {
+    return {
+      ok: false,
+      error: 'SELF_DELETE_FORBIDDEN',
+    };
+  }
+
+  // 1. Try server-side Admin API route (/api/cms/users)
+  try {
+    const res = await fetch(
+      `/api/cms/users?userId=${encodeURIComponent(targetUserId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+    if (res.status !== 501) {
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        return { ok: false, error: json.error || 'Could not delete user' };
+      }
+      return { ok: true };
+    }
+  } catch {
+    // Fallback to RPC
+  }
+
+  // 2. Try Postgres SECURITY DEFINER RPC (admin_delete_user)
+  const { error: rpcErr } = await sb.rpc('admin_delete_user', {
+    target_user_id: targetUserId,
+  });
+
+  if (!rpcErr) {
+    return { ok: true };
+  }
+
+  const rpcMsg = String(rpcErr.message || '');
+  const isRpcMissing =
+    rpcErr.code === 'PGRST202' ||
+    rpcErr.code === '42883' ||
+    rpcMsg.toLowerCase().includes('could not find the function') ||
+    rpcMsg.toLowerCase().includes('does not exist');
+
+  if (isRpcMissing) {
+    // Fallback: remove from public.admin_users if table exists
+    const { error: delErr } = await sb
+      .from('admin_users')
+      .delete()
+      .eq('user_id', targetUserId);
+    if (!delErr) {
+      return { ok: true };
+    }
+    return { ok: false, needsSqlRpc: true, error: 'SQL_RPC_REQUIRED' };
+  }
+
+  return { ok: false, error: rpcMsg };
+}
+
 function mapRowToProject(r: Record<string, unknown>): ProjectItem {
   return {
     id: String(r.id),

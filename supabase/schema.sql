@@ -166,6 +166,195 @@ as $$
 $$;
 
 -- ============================================================================
+-- ADMIN USER MANAGEMENT RPC FUNCTIONS (List, Create, Change Password, Delete)
+-- ============================================================================
+
+create or replace function public.admin_list_users()
+returns table (
+  user_id uuid,
+  email text,
+  created_at timestamptz,
+  last_sign_in_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Geen beheerdersrechten';
+  end if;
+
+  return query
+  select
+    u.id as user_id,
+    coalesce(u.email::text, au.email, '') as email,
+    coalesce(u.created_at, au.created_at, now()) as created_at,
+    u.last_sign_in_at
+  from auth.users u
+  left join public.admin_users au on au.user_id = u.id
+  where coalesce((u.raw_user_meta_data->>'is_admin')::boolean, true) = true
+  order by u.created_at asc;
+end;
+$$;
+
+create or replace function public.admin_create_user(
+  target_email text,
+  target_password text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  new_user_id uuid := gen_random_uuid();
+  clean_email text := lower(trim(target_email));
+  encrypted_pw text;
+begin
+  if not public.is_admin() then
+    raise exception 'Geen beheerdersrechten';
+  end if;
+
+  if clean_email = '' or position('@' in clean_email) = 0 then
+    raise exception 'Ongeldig e-mailadres';
+  end if;
+
+  if char_length(target_password) < 8 then
+    raise exception 'Wachtwoord moet minimaal 8 tekens bevatten';
+  end if;
+
+  if exists (select 1 from auth.users where lower(email) = clean_email) then
+    raise exception 'Er bestaat al een gebruiker met dit e-mailadres';
+  end if;
+
+  encrypted_pw := crypt(target_password, gen_salt('bf'));
+
+  insert into auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at,
+    confirmation_token,
+    email_change,
+    email_change_token_new,
+    recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000',
+    new_user_id,
+    'authenticated',
+    'authenticated',
+    clean_email,
+    encrypted_pw,
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"is_admin":true}'::jsonb,
+    now(),
+    now(),
+    '',
+    '',
+    '',
+    ''
+  );
+
+  insert into auth.identities (
+    id,
+    user_id,
+    provider_id,
+    identity_data,
+    provider,
+    last_sign_in_at,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    new_user_id,
+    new_user_id::text,
+    jsonb_build_object(
+      'sub', new_user_id::text,
+      'email', clean_email,
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    'email',
+    now(),
+    now(),
+    now()
+  );
+
+  insert into public.admin_users (user_id, email)
+  values (new_user_id, clean_email)
+  on conflict (user_id) do update set email = excluded.email;
+
+  return new_user_id;
+end;
+$$;
+
+create or replace function public.admin_update_user_password(
+  target_user_id uuid,
+  new_password text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Geen beheerdersrechten';
+  end if;
+
+  if char_length(new_password) < 8 then
+    raise exception 'Wachtwoord moet minimaal 8 tekens bevatten';
+  end if;
+
+  update auth.users
+  set
+    encrypted_password = crypt(new_password, gen_salt('bf')),
+    updated_at = now()
+  where id = target_user_id;
+
+  if not found then
+    raise exception 'Gebruiker niet gevonden';
+  end if;
+end;
+$$;
+
+create or replace function public.admin_delete_user(
+  target_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Geen beheerdersrechten';
+  end if;
+
+  if target_user_id = auth.uid() then
+    raise exception 'U kunt uw eigen actieve account niet verwijderen';
+  end if;
+
+  delete from public.admin_users where user_id = target_user_id;
+  delete from auth.users where id = target_user_id;
+end;
+$$;
+
+grant execute on function public.admin_list_users() to authenticated, service_role;
+grant execute on function public.admin_create_user(text, text) to authenticated, service_role;
+grant execute on function public.admin_update_user_password(uuid, text) to authenticated, service_role;
+grant execute on function public.admin_delete_user(uuid) to authenticated, service_role;
+
+-- ============================================================================
 -- TABLE & SCHEMA GRANTS (Required so PostgREST anon/authenticated roles can query)
 -- Row Level Security (RLS) below still restricts what each role can read/write.
 -- ============================================================================
@@ -178,7 +367,7 @@ grant select on public.services to anon, authenticated, service_role;
 grant select on public.vacancies to anon, authenticated, service_role;
 grant select on public.media_assets to anon, authenticated, service_role;
 grant insert on public.form_submissions to anon, authenticated, service_role;
-grant select, insert, update on public.admin_users to authenticated, service_role;
+grant all on public.admin_users to authenticated, service_role;
 
 grant all on public.site_content to authenticated, service_role;
 grant all on public.projects to authenticated, service_role;
@@ -202,14 +391,18 @@ alter table public.media_assets enable row level security;
 alter table public.form_submissions enable row level security;
 alter table public.admin_users enable row level security;
 
--- Admin users can read and sync their own row in public.admin_users
+-- Admin users can read and manage records in public.admin_users
 drop policy if exists "Admin users read own record" on public.admin_users;
 create policy "Admin users read own record" on public.admin_users
-  for select using (auth.uid() = user_id);
+  for select using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "Admin users sync own record" on public.admin_users;
 create policy "Admin users sync own record" on public.admin_users
-  for insert with check (auth.uid() = user_id);
+  for insert with check (auth.uid() = user_id or public.is_admin());
+
+drop policy if exists "Admin full access admin_users" on public.admin_users;
+create policy "Admin full access admin_users" on public.admin_users
+  for all using (public.is_admin()) with check (public.is_admin());
 
 -- Public read access for site_content & media_assets
 drop policy if exists "Public read site_content" on public.site_content;

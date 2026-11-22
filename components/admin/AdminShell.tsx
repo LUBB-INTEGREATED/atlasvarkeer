@@ -22,6 +22,7 @@ import {
   Database,
   Globe,
   Languages,
+  ShieldCheck,
 } from 'lucide-react';
 import { useCms } from '@/cms/CmsContext';
 import { useAdminT } from '@/cms/adminTranslations';
@@ -59,6 +60,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     { label: t.nav.vacancies, href: '/admin/vacatures', icon: Users },
     { label: t.nav.media, href: '/admin/media', icon: Images },
     { label: t.nav.submissions, href: '/admin/inzendingen', icon: Inbox, showBadge: true },
+    {
+      label: t.nav.users,
+      href: '/admin/gebruikers',
+      icon: ShieldCheck,
+    },
     {
       label: t.nav.settings,
       href: '/admin/instellingen',
